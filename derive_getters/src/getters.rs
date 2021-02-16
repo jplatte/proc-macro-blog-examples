@@ -1,4 +1,5 @@
 use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{Data, DataStruct, DeriveInput, Fields};
 
 pub fn expand_getters(input: DeriveInput) -> TokenStream {
@@ -7,5 +8,23 @@ pub fn expand_getters(input: DeriveInput) -> TokenStream {
         _ => panic!("this derive macro only works on structs with named fields"),
     };
 
-    TokenStream::new()
+    let getters = fields.into_iter().map(|f| {
+        let field_name = f.ident;
+        let field_ty = f.ty;
+
+        quote! {
+            pub fn #field_name(&self) -> &#field_ty {
+                &self.#field_name
+            }
+        }
+    });
+
+    let st_name = input.ident;
+
+    quote! {
+        #[automatically_derived]
+        impl #st_name {
+            #(#getters)*
+        }
+    }
 }
