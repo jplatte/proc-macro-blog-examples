@@ -35,7 +35,7 @@ fn news_feed_ref() {
         category: None,
     };
 
-    assert_eq!(*feed.name(), "Sudo Satirical");
+    assert_eq!(feed.name(), "Sudo Satirical");
     assert!(!feed.url().is_empty());
     assert!(feed.category().is_none());
 }
