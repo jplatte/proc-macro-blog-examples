@@ -20,10 +20,11 @@ pub fn expand_getters(input: DeriveInput) -> TokenStream {
     });
 
     let st_name = input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     quote! {
         #[automatically_derived]
-        impl #st_name {
+        impl #impl_generics #st_name #ty_generics #where_clause {
             #(#getters)*
         }
     }

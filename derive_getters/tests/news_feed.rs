@@ -19,3 +19,23 @@ fn news_feed() {
     assert!(!feed.url().is_empty());
     assert!(feed.category().is_some());
 }
+
+#[derive(Getters)]
+struct NewsFeedRef<'a> {
+    name: &'a str,
+    url: &'a str,
+    category: Option<&'a str>,
+}
+
+#[test]
+fn news_feed_ref() {
+    let feed = NewsFeedRef {
+        name: "Sudo Satirical",
+        url: "https://sudosatirical.com/articles/index.xml",
+        category: None,
+    };
+
+    assert_eq!(*feed.name(), "Sudo Satirical");
+    assert!(!feed.url().is_empty());
+    assert!(feed.category().is_none());
+}
