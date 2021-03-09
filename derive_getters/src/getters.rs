@@ -2,32 +2,52 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Attribute, Data, DataStruct, DeriveInput, Fields, Ident, Lit, Meta, NestedMeta};
 
-pub fn expand_getters(input: DeriveInput) -> TokenStream {
+pub fn expand_getters(input: DeriveInput) -> syn::Result<TokenStream> {
     let fields = match input.data {
         Data::Struct(DataStruct { fields: Fields::Named(fields), .. }) => fields.named,
         _ => panic!("this derive macro only works on structs with named fields"),
     };
 
-    let getters = fields.into_iter().map(|f| {
-        let field_name = f.ident;
-        let field_ty = f.ty;
+    let getters = fields
+        .into_iter()
+        .map(|f| {
+            let attrs: Vec<_> =
+                f.attrs.iter().filter(|attr| attr.path.is_ident("getter")).collect();
 
-        quote! {
-            pub fn #field_name(&self) -> &#field_ty {
-                &self.#field_name
-            }
-        }
-    });
+            let name_from_attr = match attrs.len() {
+                0 => None,
+                1 => get_name_attr(attrs[0])?,
+                _ => {
+                    let mut error =
+                        syn::Error::new_spanned(attrs[1], "redundant `getter(name)` attribute");
+                    error.combine(syn::Error::new_spanned(attrs[0], "note: first one here"));
+                    return Err(error);
+                }
+            };
+
+            // if there is no `getter(name)` attribute use the field name like before
+            let method_name =
+                name_from_attr.unwrap_or_else(|| f.ident.clone().expect("a named field"));
+            let field_name = f.ident;
+            let field_ty = f.ty;
+
+            Ok(quote! {
+                pub fn #method_name(&self) -> &#field_ty {
+                    &self.#field_name
+                }
+            })
+        })
+        .collect::<syn::Result<TokenStream>>()?;
 
     let st_name = input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-    quote! {
+    Ok(quote! {
         #[automatically_derived]
         impl #impl_generics #st_name #ty_generics #where_clause {
-            #(#getters)*
+            #getters
         }
-    }
+    })
 }
 
 fn get_name_attr(attr: &Attribute) -> syn::Result<Option<Ident>> {

@@ -7,5 +7,5 @@ use getters::expand_getters;
 #[proc_macro_derive(Getters, attributes(getter))]
 pub fn getters(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    expand_getters(input).into()
+    expand_getters(input).unwrap().into()
 }
