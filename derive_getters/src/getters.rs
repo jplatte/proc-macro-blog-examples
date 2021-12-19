@@ -1,6 +1,9 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Attribute, Data, DataStruct, DeriveInput, Fields, Ident, Lit, Meta, NestedMeta};
+use syn::{
+    parse::{Parse, ParseStream},
+    Attribute, Data, DataStruct, DeriveInput, Fields, Ident, Token,
+};
 
 pub fn expand_getters(input: DeriveInput) -> syn::Result<TokenStream> {
     let fields = match input.data {
@@ -51,38 +54,27 @@ pub fn expand_getters(input: DeriveInput) -> syn::Result<TokenStream> {
 }
 
 fn get_name_attr(attr: &Attribute) -> syn::Result<Option<Ident>> {
-    let meta = attr.parse_meta()?;
-    let meta_list = match meta {
-        Meta::List(list) => list,
-        _ => return Err(syn::Error::new_spanned(meta, "expected a list-style attribute")),
-    };
+    let meta: GetterMeta = attr.parse_args()?;
+    Ok(meta.name)
+}
 
-    let nested = match meta_list.nested.len() {
-        // `#[getter()]` without any arguments is a no-op
-        0 => return Ok(None),
-        1 => &meta_list.nested[0],
-        _ => {
+struct GetterMeta {
+    name: Option<Ident>,
+}
+
+impl Parse for GetterMeta {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let arg_name: Ident = input.parse()?;
+        if arg_name != "name" {
             return Err(syn::Error::new_spanned(
-                meta_list.nested,
-                "currently only a single getter attribute is supported",
+                arg_name,
+                "unsupported getter attribute, expected `name`",
             ));
         }
-    };
 
-    let name_value = match nested {
-        NestedMeta::Meta(Meta::NameValue(nv)) => nv,
-        _ => return Err(syn::Error::new_spanned(nested, "expected `name = \"<value>\"`")),
-    };
+        let _: Token![=] = input.parse()?;
+        let name = input.parse()?;
 
-    if !name_value.path.is_ident("name") {
-        return Err(syn::Error::new_spanned(
-            &name_value.path,
-            "unsupported getter attribute, expected `name`",
-        ));
-    }
-
-    match &name_value.lit {
-        Lit::Str(s) => syn::parse_str(&s.value()).map_err(|e| syn::Error::new_spanned(s, e)),
-        lit => Err(syn::Error::new_spanned(lit, "expected string literal")),
+        Ok(Self { name: Some(name) })
     }
 }

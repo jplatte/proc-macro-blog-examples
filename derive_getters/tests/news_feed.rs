@@ -4,7 +4,7 @@ use derive_getters::Getters;
 struct NewsFeed {
     name: String,
     url: String,
-    #[getter(name = "category")]
+    #[getter(name = category)]
     cat: Option<String>,
 }
 
@@ -25,7 +25,7 @@ fn news_feed() {
 struct NewsFeedRef<'a> {
     name: &'a str,
     url: &'a str,
-    #[getter(name = "category")]
+    #[getter(name = category)]
     cat: Option<&'a str>,
 }
 
