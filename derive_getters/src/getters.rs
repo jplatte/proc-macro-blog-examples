@@ -2,7 +2,9 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
-    parse_quote, Data, DataStruct, DeriveInput, Fields, Ident, Token, Visibility,
+    parse_quote,
+    punctuated::Punctuated,
+    Data, DataStruct, DeriveInput, Fields, Ident, Token, Visibility,
 };
 
 pub fn expand_getters(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -18,7 +20,12 @@ pub fn expand_getters(input: DeriveInput) -> syn::Result<TokenStream> {
                 .attrs
                 .iter()
                 .filter(|attr| attr.path.is_ident("getter"))
-                .try_fold(GetterMeta::default(), |meta, attr| meta.merge(attr.parse_args()?))?;
+                .try_fold(GetterMeta::default(), |meta, attr| {
+                    let list: Punctuated<GetterMeta, Token![,]> =
+                        attr.parse_args_with(Punctuated::parse_terminated)?;
+
+                    list.into_iter().try_fold(meta, GetterMeta::merge)
+                })?;
 
             let visibility = meta.vis.unwrap_or_else(|| parse_quote! { pub });
             let method_name = meta.name.unwrap_or_else(|| f.ident.clone().expect("a named field"));
