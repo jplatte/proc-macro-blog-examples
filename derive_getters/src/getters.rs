@@ -77,22 +77,28 @@ impl GetterMeta {
 
 impl Parse for GetterMeta {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
-        let arg_name: Ident = input.parse()?;
-        if arg_name == "name" {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(kw::name) {
+            let _: kw::name = input.parse()?;
             let _: Token![=] = input.parse()?;
             let name = input.parse()?;
 
             Ok(Self { name: Some(name), vis: None })
-        } else if arg_name == "vis" {
+        } else if lookahead.peek(kw::vis) {
+            let _: kw::vis = input.parse()?;
             let _: Token![=] = input.parse()?;
             let vis = input.parse()?;
 
             Ok(Self { name: None, vis: Some(vis) })
         } else {
-            Err(syn::Error::new_spanned(
-                arg_name,
-                "unsupported getter attribute, expected `name` or `vis`",
-            ))
+            Err(lookahead.error())
         }
     }
+}
+
+mod kw {
+    use syn::custom_keyword;
+
+    custom_keyword!(name);
+    custom_keyword!(vis);
 }
