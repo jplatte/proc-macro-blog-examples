@@ -1,10 +1,10 @@
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
+use quote::{quote, quote_spanned, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
     parse_quote,
     punctuated::Punctuated,
-    Data, DataStruct, DeriveInput, Fields, Ident, Token, Visibility,
+    Data, DataStruct, DeriveInput, Fields, Ident, LitStr, Token, Visibility,
 };
 
 pub fn expand_getters(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -32,8 +32,18 @@ pub fn expand_getters(input: DeriveInput) -> syn::Result<TokenStream> {
             let field_name = f.ident;
             let field_ty = f.ty;
 
+            let deprecation_note = meta.deprecated_name_syntax.then(|| {
+                quote_spanned! {method_name.span()=>
+                    #[deprecated = "Using a string literal as a name attribute is deprecated. \
+                        Use an identifier instead (remove the quotes)."]
+                    fn name_literal() {}
+                    name_literal();
+                }
+            });
+
             Ok(quote! {
                 #visibility fn #method_name(&self) -> &#field_ty {
+                    #deprecation_note
                     &self.#field_name
                 }
             })
@@ -55,6 +65,8 @@ pub fn expand_getters(input: DeriveInput) -> syn::Result<TokenStream> {
 struct GetterMeta {
     name: Option<Ident>,
     vis: Option<Visibility>,
+
+    deprecated_name_syntax: bool,
 }
 
 impl GetterMeta {
@@ -71,7 +83,11 @@ impl GetterMeta {
             }
         }
 
-        Ok(Self { name: either(self.name, other.name)?, vis: either(self.vis, other.vis)? })
+        Ok(Self {
+            name: either(self.name, other.name)?,
+            vis: either(self.vis, other.vis)?,
+            deprecated_name_syntax: self.deprecated_name_syntax || other.deprecated_name_syntax,
+        })
     }
 }
 
@@ -81,15 +97,30 @@ impl Parse for GetterMeta {
         if lookahead.peek(kw::name) {
             let _: kw::name = input.parse()?;
             let _: Token![=] = input.parse()?;
-            let name = input.parse()?;
 
-            Ok(Self { name: Some(name), vis: None })
+            let lookahead = input.lookahead1();
+            let (name, deprecated_name_syntax) = if lookahead.peek(Ident) {
+                (input.parse()?, false)
+            } else if lookahead.peek(LitStr) {
+                let s: LitStr = input.parse()?;
+                let span = s.span(); // We need this span for error reporting
+
+                let mut name: Ident =
+                    syn::parse_str(&s.value()).map_err(|e| syn::Error::new_spanned(s, e))?;
+                name.set_span(span);
+
+                (name, true)
+            } else {
+                return Err(lookahead.error());
+            };
+
+            Ok(Self { name: Some(name), vis: None, deprecated_name_syntax })
         } else if lookahead.peek(kw::vis) {
             let _: kw::vis = input.parse()?;
             let _: Token![=] = input.parse()?;
             let vis = input.parse()?;
 
-            Ok(Self { name: None, vis: Some(vis) })
+            Ok(Self { name: None, vis: Some(vis), deprecated_name_syntax: false })
         } else {
             Err(lookahead.error())
         }
